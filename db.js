@@ -5,6 +5,7 @@ const db = new sqlite.Database('3alegny.db');
 // New User Table
 const createUserTable = `CREATE TABLE IF NOT EXISTS USER (
   ID INTEGER PRIMARY KEY AUTOINCREMENT,
+  NAME TEXT,
   EMAIL TEXT UNIQUE NOT NULL,
   ROLE TEXT NOT NULL,
   PASSWORD TEXT NOT NULL

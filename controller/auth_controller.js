@@ -8,12 +8,13 @@ const signToken = (id, role) => {
 
 // POST /signup
 const signUp = (req, res) => {
+  const name = req.body.name;
   const email = req.body.email;
   const password = req.body.password;
-  const role = 'user'; // default to non-admin
+  const role = 'user'; 
 
-  if (!email || !password) {
-    return res.status(400).send('Please provide email, and password.');
+  if (!email || !password || !name) {
+    return res.status(400).send('Please provide email, password and name.');
   }
 
   bcrypt.hash(password, 10, (err, hashedPassword) => {
@@ -24,11 +25,12 @@ const signUp = (req, res) => {
 
     // Insert
     const query = `
-      INSERT INTO USER (EMAIL, ROLE, PASSWORD)
-      VALUES ('${email}', '${role}', '${hashedPassword}')
+      INSERT INTO USER (NAME, EMAIL, ROLE, PASSWORD)
+      VALUES (?,?,?,?)
     `;
+    const params = [name, email, role, hashedPassword];
 
-    db.run(query, (err) => {
+    db.run(query, params, function(err) {
       if (err) {
         // Handle unique constraint violation
         if (err.message.includes('UNIQUE constraint')) {
