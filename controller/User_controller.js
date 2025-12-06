@@ -1,6 +1,5 @@
 const { db } = require('../db.js');
 
-// Retrieve all users
 const retrieveAllUsers = (req, res) => {
   const query = `SELECT * FROM USER`;
 
@@ -16,11 +15,9 @@ const retrieveAllUsers = (req, res) => {
   });
 };
 
-// Create a new user
 const createUser = (req, res) => {
   const { email, role, password } = req.body;
 
-  // Basic validation
   if (!email || !role || !password) {
     return res.status(400).json({ message: 'All fields are required' });
   }
@@ -31,7 +28,6 @@ const createUser = (req, res) => {
         return res.status(500).send('Error hashing password.');
       }
   
-      // Insert
       const query = `
         INSERT INTO USER (EMAIL, ROLE, PASSWORD)
         VALUES ('${email}', '${role}', '${hashedPassword}')
@@ -58,8 +54,115 @@ const createUser = (req, res) => {
     });
 };
 
+const addAddress = (req, res) => {
+  const userId = req.user && req.user.id;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!street || !building || !floor || !apartment) {
+    return res.status(400).json({ error: 'street, building, floor, and apartment are required' });
+  }
+
+  // Check if user exists
+  db.get('SELECT ID FROM USER WHERE ID = ?', [userId], (err, user) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const query = `
+      INSERT INTO ADDRESS (USER_ID, STREET, BUILDING, FLOOR, APARTMENT)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    const params = [userId, street, building, floor, apartment];
+
+    db.run(query, params, function(err) {
+      if (err) {
+        console.error('DB insert error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Address added successfully',
+        addressId: this.lastID,
+      });
+    });
+  });
+};
+
+const getAllAddresses = (req, res) => {
+  const userId = req.user && req.user.id;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const query = `SELECT * FROM ADDRESS WHERE USER_ID = ?`;
+
+  db.all(query, [userId], (err, rows) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    return res.json({ data: rows });
+  });
+};
+
+const getAddressById = (req, res) => {
+  const { id } = req.params;
+  const userId = req.user && req.user.id;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const query = `SELECT * FROM ADDRESS WHERE ID = ? AND USER_ID = ?`;
+
+  db.get(query, [id, userId], (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (!row) {
+      return res.status(404).json({ error: 'Address not found' });
+    }
+    return res.json({ data: row });
+  });
+};
+
+const deleteAddress = (req, res) => {
+  const { id } = req.params;
+  const userId = req.user && req.user.id;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const query = `DELETE FROM ADDRESS WHERE ID = ? AND USER_ID = ?`;
+
+  db.run(query, [id, userId], function(err) {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Address not found' });
+    }
+    return res.json({ message: 'Address deleted successfully' });
+  });
+};
 
 module.exports = {
   createUser,
   retrieveAllUsers,
+  addAddress,
+  getAllAddresses,
+  getAddressById,
+  deleteAddress,
 };

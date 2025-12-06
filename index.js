@@ -4,6 +4,9 @@ const dotenv = require('dotenv');
 const app = express();
 const authRouter = require('./routes/authRouter.js');
 const userRouter = require('./routes/User_Router.js')
+const medicineRouter = require('./routes/medicineRouter.js');
+const cartRouter = require('./routes/cartRouter.js');
+const orderRouter = require('./routes/orderRouter.js');
 const path = require('path');
 
 
@@ -19,6 +22,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use('/auth', authRouter); 
 app.use('/user', userRouter);
+app.use('/medicine', medicineRouter);
+app.use('/cart', cartRouter);
+app.use('/order', orderRouter);
 
 
 module.exports= {

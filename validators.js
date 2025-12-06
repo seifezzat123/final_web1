@@ -15,7 +15,6 @@ const sanitizeInput = (value) => {
   };
  
  
-  // Checks if required fields exist and are non-empty
   const validateRequired = (fields, requiredKeys) => {
     for (const key of requiredKeys) {
       if (!fields[key] || !String(fields[key]).trim()) {
@@ -53,7 +52,9 @@ const validateSignup = (req, res, next) => {
     const passwordError = validatePassword(password);
     if (passwordError) return res.status(400).json({ error: passwordError});
 
-    req.body = { name, email, password, role: 'user'};                                                                    
+    let { role } = req.body;
+    role = sanitizeInput(role) || 'buyer';
+    req.body = { name, email, password, role };
     next();
 
 };

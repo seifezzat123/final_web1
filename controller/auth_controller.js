@@ -6,15 +6,19 @@ const signToken = (id, role) => {
     return jwt.sign({id, role}, process.env.JWT_SECRET, {expiresIn: process.env.JWT_EXPIRES_IN});
 }
 
-// POST /signup
 const signUp = (req, res) => {
   const name = req.body.name;
   const email = req.body.email;
   const password = req.body.password;
-  const role = 'user'; 
+  const role = req.body.role || 'buyer'; 
 
-  if (!email || !password || !name) {
-    return res.status(400).send('Please provide email, password and name.');
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'name, email and password are required' });
+  }
+
+  if (!['buyer', 'seller'].includes(role)) {
+    return res.status(400).json({ error:` role must be "buyer" or "seller", received: ${role}` });
   }
 
   bcrypt.hash(password, 10, (err, hashedPassword) => {
@@ -23,7 +27,6 @@ const signUp = (req, res) => {
       return res.status(500).send('Error hashing password.');
     }
 
-    // Insert
     const query = `
       INSERT INTO USER (NAME, EMAIL, ROLE, PASSWORD)
       VALUES (?,?,?,?)
@@ -32,7 +35,6 @@ const signUp = (req, res) => {
 
     db.run(query, params, function(err) {
       if (err) {
-        // Handle unique constraint violation
         if (err.message.includes('UNIQUE constraint')) {
           return res.status(400).send('Email already exists.');
         }
@@ -40,7 +42,6 @@ const signUp = (req, res) => {
         return res.status(500).send('Database error.');
       }
 
-      // Create token
       const token = signToken(this.lastID, role);
       return res.status(201).json({
         status: 'success',
@@ -59,9 +60,10 @@ const login = (req, res) => {
     return res.status(400).send('Please provide email and password.');
   }
 
-  const query = `SELECT * FROM USER WHERE EMAIL='${email}'`;
+  const normalizedEmail = String(email).toLowerCase().trim();
+  const query = `SELECT * FROM USER WHERE EMAIL = ?`;
 
-  db.get(query, (err, row) => {
+  db.get(query, [normalizedEmail], (err, row) => {
     if (err) {
       console.log(err);
       return res.status(500).send('Database error');
@@ -71,7 +73,6 @@ const login = (req, res) => {
       return res.status(401).send('Invalid credentials');
     }
 
-    // Compare the hashed password
     bcrypt.compare(password, row.PASSWORD, (err, isMatch) => {
       if (err) {
         console.error(err);
@@ -82,7 +83,6 @@ const login = (req, res) => {
         return res.status(401).send('Invalid credentials');
       }
 
-      // Generate JWT token for successful login
       const token = signToken(row.ID, row.ROLE);
 
       return res.status(200).json({
@@ -98,7 +98,6 @@ const login = (req, res) => {
   });
 };
 
-// --- VERIFY TOKEN MIDDLEWARE ---
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -130,7 +129,7 @@ const verifyAdmin = (req, res, next) => {
 const getMe = (req, res) => {
   const token = req.cookies.jwt;
   
-  if (!token) return res.jason({ user});
+  if (!token) return res.json({ user: null });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     db.get(
@@ -139,15 +138,101 @@ const getMe = (req, res) => {
       (err, user) => {
         if (err || !user) return res.json({ user: null });
         res.json({ user });
-
-      }    
-
+      }
     );
   } catch (err) {
     return res.json({ user: null });
   }
-    
 };
 
+const getUserById = (req, res) => {
+  const { id } = req.params;
+  const currentUser = req.user;
 
-module.exports = { signUp, login, verifyToken, verifyAdmin, getMe };
+  if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Admin can get any user, otherwise only themselves
+  if (currentUser.role !== 'admin' && currentUser.id !== parseInt(id)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  db.get('SELECT ID, NAME, EMAIL, ROLE FROM USER WHERE ID = ?', [id], (err, user) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    return res.json({ user });
+  });
+};
+
+const updateUser = (req, res) => {
+  const { id } = req.params;
+  const { name, email } = req.body;
+  const currentUser = req.user;
+
+  if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Admin can update any user, otherwise only themselves
+  if (currentUser.role !== 'admin' && currentUser.id !== parseInt(id)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  if (!name && !email) {
+    return res.status(400).json({ error: 'At least name or email is required' });
+  }
+
+  const updates = [];
+  const values = [];
+  if (name) {
+    updates.push('NAME = ?');
+    values.push(name);
+  }
+  if (email) {
+    updates.push('EMAIL = ?');
+    values.push(email.toLowerCase().trim());
+  }
+  values.push(id);
+
+  const query = `UPDATE USER SET ${updates.join(', ')} WHERE ID = ?`;
+
+  db.run(query, values, function(err) {
+    if (err) {
+      if (err.message && err.message.includes('UNIQUE constraint')) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    return res.json({ message: 'User updated successfully' });
+  });
+};
+
+const deleteUser = (req, res) => {
+  const { id } = req.params;
+  const currentUser = req.user;
+
+  if (!currentUser) return res.status(401).json({ error: 'Unauthorized' });
+
+  // Admin only
+  if (currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied: Admins only' });
+  }
+
+  db.run('DELETE FROM USER WHERE ID = ?', [id], function(err) {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({ message: 'User deleted successfully' });
+  });
+};
+
+const logout = (req, res) => {
+  return res.json({ message: 'Logged out successfully' });
+};
+
+module.exports = { signUp, login, verifyToken, verifyAdmin, getMe, getUserById, updateUser, deleteUser, logout };
