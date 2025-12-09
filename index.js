@@ -26,6 +26,7 @@ app.use('/user', userRouter);
 app.use('/medicine', medicineRouter);
 app.use('/cart', cartRouter);
 app.use('/order', orderRouter);
+app.use('/feedback', feedbackRouter);
 
 
 module.exports= {

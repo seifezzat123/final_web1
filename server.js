@@ -22,6 +22,9 @@ db.serialize(() => {
     db.run(db_access.createOrderTable, (err) => {
         if (err) console.log('Error creating order table;', err.message);
     })
+    db.run(db_access.createFeedbackTable, (err) => {
+        if (err) console.log('Error creating feedback table;', err.message);
+    })
 });
 
 
