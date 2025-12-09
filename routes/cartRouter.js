@@ -9,14 +9,5 @@ router.get('/', verifyAdmin, getAllCarts);
 router.get('/my-cart', verifyToken, getMyCart);
 router.put('/:id', verifyToken, updateCartItem);
 router.delete('/:id', verifyToken, removeFromCart);
-router.post('/', verifyToken, addToCart);
-
-router.get('/', verifyAdmin, getAllCarts);
-
-router.get('/my-cart', verifyToken, getMyCart);
-
-router.put('/:id', verifyToken, updateCartItem);
-
-router.delete('/:id', verifyToken, removeFromCart);
 
 module.exports = router;

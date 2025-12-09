@@ -235,4 +235,4 @@ const logout = (req, res) => {
   return res.json({ message: 'Logged out successfully' });
 };
 
-module.exports = { signUp, login, verifyToken, verifyAdmin, getMe, getUserById, updateUser, deleteUser, logout };
+module.exports = { signUp, login, verifyToken, verifyAdmin, getMe, getUserById, updateUser, deleteUser, logout, signToken };

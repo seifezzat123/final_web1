@@ -1,4 +1,6 @@
 const { db } = require('../db.js');
+const bcrypt = require('bcryptjs');
+const { signToken } = require('./auth_controller');
 
 const retrieveAllUsers = (req, res) => {
   const query = `SELECT * FROM USER`;
@@ -16,10 +18,14 @@ const retrieveAllUsers = (req, res) => {
 };
 
 const createUser = (req, res) => {
-  const { email, role, password } = req.body;
+  const { name, email, role, password } = req.body;
 
-  if (!email || !role || !password) {
-    return res.status(400).json({ message: 'All fields are required' });
+  if (!name || !email || !role || !password) {
+    return res.status(400).json({ message: 'name, email, role, and password are required' });
+  }
+
+  if (!['buyer', 'seller', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'role must be "buyer", "seller", or "admin"' });
   }
 
   bcrypt.hash(password, 10, (err, hashedPassword) => {
@@ -29,13 +35,13 @@ const createUser = (req, res) => {
       }
   
       const query = `
-        INSERT INTO USER (EMAIL, ROLE, PASSWORD)
-        VALUES ('${email}', '${role}', '${hashedPassword}')
+        INSERT INTO USER (NAME, EMAIL, ROLE, PASSWORD)
+        VALUES (?, ?, ?, ?)
       `;
+      const params = [name, email, role, hashedPassword];
   
-      db.run(query, (err) => {
+      db.run(query, params, function(err) {
         if (err) {
-          // Handle unique constraint violation
           if (err.message.includes('UNIQUE constraint')) {
             return res.status(400).send('Email already exists.');
           }
@@ -43,11 +49,10 @@ const createUser = (req, res) => {
           return res.status(500).send('Database error.');
         }
   
-        // Create token
         const token = signToken(this.lastID, role);
         return res.status(201).json({
           status: 'success',
-          message: 'Registration successful',
+          message: 'User created successfully',
           token,
         });
       });
