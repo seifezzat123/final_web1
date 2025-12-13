@@ -80,7 +80,7 @@ const login = (req, res) => {
       }
 
       if (!isMatch) {
-        return res.status(401).send('Invalid credentials');
+        return res.status(401).json({ error: 'Invalid credentials' });
       }
 
       const token = signToken(row.ID, row.ROLE);

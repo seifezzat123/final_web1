@@ -9,23 +9,25 @@ const createOrder = (req, res) => {
     return res.status(403).json({ error: 'Access denied: only buyers can create orders' });
   }
 
-  const { address_id, cart_id } = req.body;
+  const { street, building, floor, apartment } = req.body;
 
-  if (!address_id || !cart_id) {
-    return res.status(400).json({ error: 'address_id and cart_id are required' });
+  if (!street || !building || !floor || !apartment) {
+    return res.status(400).json({ error: 'street, building, floor, and apartment are required' });
   }
 
-  // Check if address belongs to user
-  db.get('SELECT ID FROM ADDRESS WHERE ID = ? AND USER_ID = ?', [address_id, user.id], (err, address) => {
+  // Step 1: Create address first
+  const addressQuery = `INSERT INTO ADDRESS (USER_ID, STREET, BUILDING, FLOOR, APARTMENT) 
+                        VALUES (?, ?, ?, ?, ?)`;
+  
+  db.run(addressQuery, [user.id, street, building, floor, apartment], function(err) {
     if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Database error' });
+      console.error('Address creation error:', err);
+      return res.status(500).json({ error: 'Failed to create address' });
     }
-    if (!address) {
-      return res.status(404).json({ error: 'Address not found or does not belong to you' });
-    }
+    
+    const address_id = this.lastID;
 
-    // Get cart item(s) and calculate total price
+    // Step 2: Get cart items and calculate total price
     db.all(
       `SELECT C.ID, C.QUANTITY, M.PRICE FROM CART C 
        LEFT JOIN MEDICINE M ON C.MEDICINE_ID = M.ID 
@@ -47,22 +49,33 @@ const createOrder = (req, res) => {
           totalPrice += item.QUANTITY * item.PRICE;
         });
 
-        // Create order
-        const query = `INSERT INTO ORDER_TABLE (USER_ID, ADDRESS_ID, CART_ID, TOTAL_PRICE, STATUS) 
-                       VALUES (?, ?, ?, ?, ?)`;
+        // Step 3: Create order (use first cart item ID as cart_id for now)
+        const cart_id = cartItems[0].ID;
+        const orderQuery = `INSERT INTO ORDER_TABLE (USER_ID, ADDRESS_ID, CART_ID, TOTAL_PRICE, STATUS) 
+                           VALUES (?, ?, ?, ?, ?)`;
         const params = [user.id, address_id, cart_id, totalPrice, 'pending'];
 
-        db.run(query, params, function(err) {
+        db.run(orderQuery, params, function(err) {
           if (err) {
-            console.error('DB insert error:', err);
+            console.error('Order creation error:', err);
             return res.status(500).json({ error: 'Database error' });
           }
 
-          return res.status(201).json({
-            status: 'success',
-            message: 'Order created successfully',
-            orderId: this.lastID,
-            totalPrice: totalPrice,
+          const order_id = this.lastID;
+
+          // Step 4: Clear user's cart after successful order
+          db.run('DELETE FROM CART WHERE USER_ID = ?', [user.id], (err) => {
+            if (err) {
+              console.error('Cart clear error:', err);
+              // Don't fail the order if cart clear fails
+            }
+
+            return res.status(201).json({
+              status: 'success',
+              message: 'Order created successfully',
+              orderId: order_id,
+              totalPrice: totalPrice,
+            });
           });
         });
       }
