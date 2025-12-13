@@ -8,44 +8,85 @@ const addFeedback = (req, res) => {
     return res.status(403).json({ error: 'Access denied: only buyers can submit feedback' });
   }
 
-  const { order_id, order_quality, delivery_rating, comments } = req.body;
+  // Support both medicine feedback and order feedback
+  const { medicine_id, rating, comment, order_id, order_quality, delivery_rating, comments } = req.body;
 
-  if (!order_id || order_quality == null || delivery_rating == null) {
-    return res.status(400).json({ error: 'order_id, order_quality, and delivery_rating are required' });
-  }
-
-  if (order_quality < 1 || order_quality > 5 || delivery_rating < 1 || delivery_rating > 5) {
-    return res.status(400).json({ error: 'order_quality and delivery_rating must be between 1 and 5' });
-  }
-
-  db.get('SELECT ID FROM ORDER_TABLE WHERE ID = ? AND USER_ID = ?', [order_id, user.id], (err, order) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found or does not belong to you' });
+  // Medicine feedback
+  if (medicine_id) {
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'rating must be between 1 and 5' });
     }
 
-    const query = `
-      INSERT INTO FEEDBACK (USER_ID, ORDER_ID, ORDER_QUALITY, DELIVERY_RATING, COMMENTS)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    const params = [user.id, order_id, order_quality, delivery_rating, comments || null];
-
-    db.run(query, params, function(err) {
+    db.get('SELECT ID FROM MEDICINE WHERE ID = ?', [medicine_id], (err, medicine) => {
       if (err) {
-        console.error('DB insert error:', err);
+        console.error(err);
         return res.status(500).json({ error: 'Database error' });
       }
+      if (!medicine) {
+        return res.status(404).json({ error: 'Medicine not found' });
+      }
 
-      return res.status(201).json({
-        status: 'success',
-        message: 'Feedback submitted successfully',
-        feedbackId: this.lastID,
+      const query = `
+        INSERT INTO MEDICINE_FEEDBACK (USER_ID, MEDICINE_ID, RATING, COMMENT)
+        VALUES (?, ?, ?, ?)
+      `;
+      const params = [user.id, medicine_id, rating, comment || null];
+
+      db.run(query, params, function(err) {
+        if (err) {
+          console.error('DB insert error:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        return res.status(201).json({
+          status: 'success',
+          message: 'Feedback submitted successfully',
+          feedbackId: this.lastID,
+        });
       });
     });
-  });
+  }
+  // Order feedback
+  else if (order_id) {
+    if (!order_quality || !delivery_rating) {
+      return res.status(400).json({ error: 'order_quality and delivery_rating are required' });
+    }
+
+    if (order_quality < 1 || order_quality > 5 || delivery_rating < 1 || delivery_rating > 5) {
+      return res.status(400).json({ error: 'order_quality and delivery_rating must be between 1 and 5' });
+    }
+
+    db.get('SELECT ID FROM ORDER_TABLE WHERE ID = ? AND USER_ID = ?', [order_id, user.id], (err, order) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found or does not belong to you' });
+      }
+
+      const query = `
+        INSERT INTO FEEDBACK (USER_ID, ORDER_ID, ORDER_QUALITY, DELIVERY_RATING, COMMENTS)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      const params = [user.id, order_id, order_quality, delivery_rating, comments || null];
+
+      db.run(query, params, function(err) {
+        if (err) {
+          console.error('DB insert error:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        return res.status(201).json({
+          status: 'success',
+          message: 'Feedback submitted successfully',
+          feedbackId: this.lastID,
+        });
+      });
+    });
+  } else {
+    return res.status(400).json({ error: 'Either medicine_id or order_id is required' });
+  }
 };
 
 const getAllFeedback = (req, res) => {
@@ -56,12 +97,15 @@ const getAllFeedback = (req, res) => {
     return res.status(403).json({ error: 'Access denied: admins only' });
   }
 
+  // Get medicine feedback (what admin dashboard expects)
   const query = `
-    SELECT F.ID, F.USER_ID, F.ORDER_ID, F.ORDER_QUALITY, F.DELIVERY_RATING, F.COMMENTS, F.CREATED_AT,
-           U.EMAIL as USER_EMAIL, U.NAME as USER_NAME
-    FROM FEEDBACK F
-    LEFT JOIN USER U ON F.USER_ID = U.ID
-    ORDER BY F.CREATED_AT DESC
+    SELECT MF.ID, MF.USER_ID, MF.MEDICINE_ID, MF.RATING, MF.COMMENT, MF.CREATED_AT,
+           U.NAME as USER_NAME, U.EMAIL as USER_EMAIL,
+           M.NAME as MEDICINE_NAME
+    FROM MEDICINE_FEEDBACK MF
+    LEFT JOIN USER U ON MF.USER_ID = U.ID
+    LEFT JOIN MEDICINE M ON MF.MEDICINE_ID = M.ID
+    ORDER BY MF.CREATED_AT DESC
   `;
 
   db.all(query, (err, rows) => {

@@ -25,6 +25,9 @@ db.serialize(() => {
     db.run(db_access.createFeedbackTable, (err) => {
         if (err) console.log('Error creating feedback table;', err.message);
     })
+    db.run(db_access.createMedicineFeedbackTable, (err) => {
+        if (err) console.log('Error creating medicine feedback table;', err.message);
+    })
 });
 
 

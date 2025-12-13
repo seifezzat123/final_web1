@@ -199,4 +199,42 @@ const updateOrderStatus = (req, res) => {
   });
 };
 
-module.exports = { createOrder, getAllOrders, getMyOrders, getOrderById, updateOrderStatus };
+const getOrderItems = (req, res) => {
+  const user = req.user;
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { id } = req.params;
+
+  // First verify the order belongs to the user (unless admin)
+  const orderCheckQuery = `SELECT USER_ID FROM ORDER_TABLE WHERE ID = ?`;
+  
+  db.get(orderCheckQuery, [id], (err, order) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    // Check if user owns this order or is admin
+    if (user.role !== 'admin' && order.USER_ID !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Since cart items are deleted after order creation,
+    // just return all available medicines for feedback
+    const query = `SELECT ID as MEDICINE_ID, NAME as MEDICINE_NAME FROM MEDICINE ORDER BY NAME`;
+    
+    db.all(query, (err, medicines) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      return res.json({ data: medicines || [] });
+    });
+  });
+};
+
+module.exports = { createOrder, getAllOrders, getMyOrders, getOrderById, updateOrderStatus, getOrderItems };
