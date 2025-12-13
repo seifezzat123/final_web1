@@ -17,8 +17,16 @@ const signUp = (req, res) => {
     return res.status(400).json({ error: 'name, email and password are required' });
   }
 
-  if (!['buyer', 'seller'].includes(role)) {
-    return res.status(400).json({ error:` role must be "buyer" or "seller", received: ${role}` });
+  // Check if trying to create admin - only existing admins can do this
+  if (role === 'admin') {
+    const currentUser = req.user;
+    if (!currentUser || currentUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can create admin users' });
+    }
+  }
+
+  if (!['buyer', 'seller', 'admin'].includes(role)) {
+    return res.status(400).json({ error:` role must be "buyer", "seller", or "admin", received: ${role}` });
   }
 
   bcrypt.hash(password, 10, (err, hashedPassword) => {
